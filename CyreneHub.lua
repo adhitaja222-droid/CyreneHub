@@ -18,6 +18,7 @@ local Players = game:GetService("Players")
 local Msg = RS:WaitForChild("Msg")
 local RemoteEvent = Msg:WaitForChild("RemoteEvent"):WaitForChild("RemoteEvent")
 local TalkFunc = Msg:WaitForChild("Function"):WaitForChild("TalkFunc")
+local RemoteFunction = Msg:WaitForChild("RemoteFunction"):WaitForChild("RemoteFunction")
 local player = Players.LocalPlayer
 local playerGui = player.PlayerGui
 
@@ -41,19 +42,45 @@ local QUEST_NAMES = {
     [5] = "Down with the Dwarf King!",
 }
 
+-- ================================================
+--  SELL DATA
+-- ================================================
+
+local MATERIAL_LIST = {
+    {name = "Copper Earring",       id = 1036},
+    {name = "Goblin Bone",          id = 1144},
+    {name = "Flame Crest",          id = 1099},
+    {name = "Wind Shard",           id = 1151},
+    {name = "Light Shard",          id = 1110},
+    {name = "Goblin Finger",        id = 1145},
+    {name = "Golden Tooth",         id = 1147},
+    {name = "Dwarf Emblem",         id = 1146},
+    {name = "Withered Mushroom",    id = 1149},
+    {name = "Blueberry",            id = 1150},
+}
+
+-- ================================================
+--  VARIABLES
+-- ================================================
+
 local questEnabled = {false, false, false, false, false}
+local sellEnabled = {}
 local skipCurrent = false
 local autoQuestEnabled = false
 local autoLoopEnabled = true
 local antiAfkEnabled = false
 local antiAfkConnection = nil
+local autoSellEnabled = false
+
+for i = 1, #MATERIAL_LIST do
+    sellEnabled[i] = false
+end
 
 -- ================================================
---  ANTI AFK FUNCTIONS
+--  ANTI AFK
 -- ================================================
 
 local function startAntiAFK()
-    -- Disconnect dulu kalau ada yang lama
     if antiAfkConnection then
         antiAfkConnection:Disconnect()
         antiAfkConnection = nil
@@ -61,18 +88,12 @@ local function startAntiAFK()
 
     local function connectIdled()
         antiAfkConnection = player.Idled:Connect(function()
-            print("[AntiAFK] Idle terdeteksi! Timer di-reset.")
-            
-            -- Disconnect dulu
+            print("[AntiAFK] Idle dicegah!")
             if antiAfkConnection then
                 antiAfkConnection:Disconnect()
                 antiAfkConnection = nil
             end
-
             task.wait(0.5)
-
-            -- Reconnect lagi = timer AFK reset
-            -- Karakter TIDAK bergerak sama sekali
             if antiAfkEnabled then
                 connectIdled()
             end
@@ -80,7 +101,6 @@ local function startAntiAFK()
     end
 
     connectIdled()
-    print("[AntiAFK] Anti AFK aktif!")
 end
 
 local function stopAntiAFK()
@@ -88,7 +108,6 @@ local function stopAntiAFK()
         antiAfkConnection:Disconnect()
         antiAfkConnection = nil
     end
-    print("[AntiAFK] Anti AFK dimatikan.")
 end
 
 -- ================================================
@@ -112,7 +131,7 @@ local Window = Rayfield:CreateWindow({
 
 local QuestTab = Window:CreateTab("Auto Quest", "scroll-text")
 
-local ControlSection = QuestTab:CreateSection("Controls")
+QuestTab:CreateSection("Controls")
 
 QuestTab:CreateToggle({
     Name         = "Auto Quest",
@@ -138,7 +157,7 @@ QuestTab:CreateToggle({
     end,
 })
 
-local QuestSection = QuestTab:CreateSection("Quest Selection")
+QuestTab:CreateSection("Quest Selection")
 
 for i = 1, 5 do
     local idx = i
@@ -153,8 +172,71 @@ for i = 1, 5 do
     })
 end
 
-local StatusSection = QuestTab:CreateSection("Status")
+QuestTab:CreateSection("Status")
 local StatusLabel = QuestTab:CreateLabel("Status: Idle")
+
+-- ================================================
+--  AUTO SELL TAB
+-- ================================================
+
+local SellTab = Window:CreateTab("Auto Sell", "shopping-cart")
+
+SellTab:CreateSection("Controls")
+
+SellTab:CreateToggle({
+    Name         = "Auto Sell",
+    CurrentValue = false,
+    Flag         = "AutoSell",
+    Callback     = function(Value)
+        autoSellEnabled = Value
+        Rayfield:Notify({
+            Title    = "Auto Sell",
+            Content  = "Auto Sell: " .. (Value and "ON" or "OFF"),
+            Duration = 2,
+            Image    = 4483362458,
+        })
+    end,
+})
+
+SellTab:CreateButton({
+    Name     = "Sell Now",
+    Callback = function()
+        local hasSell = false
+        for i = 1, #MATERIAL_LIST do
+            if sellEnabled[i] then hasSell = true break end
+        end
+        if not hasSell then
+            Rayfield:Notify({
+                Title   = "Auto Sell",
+                Content = "Pilih item dulu!",
+                Duration = 2,
+                Image   = 4483362458,
+            })
+            return
+        end
+        -- Trigger sell
+        autoSellEnabled = true
+        task.wait(0.1)
+        autoSellEnabled = false
+    end,
+})
+
+SellTab:CreateSection("Item Selection")
+
+for i = 1, #MATERIAL_LIST do
+    local idx = i
+    SellTab:CreateToggle({
+        Name         = MATERIAL_LIST[i].name,
+        CurrentValue = false,
+        Flag         = "Sell"..i,
+        Callback     = function(Value)
+            sellEnabled[idx] = Value
+        end,
+    })
+end
+
+SellTab:CreateSection("Status")
+local SellStatusLabel = SellTab:CreateLabel("Status: Idle")
 
 -- ================================================
 --  PLAYER TAB
@@ -162,7 +244,7 @@ local StatusLabel = QuestTab:CreateLabel("Status: Idle")
 
 local PlayerTab = Window:CreateTab("Player", "user")
 
-local PlayerSection = PlayerTab:CreateSection("Stats")
+PlayerTab:CreateSection("Stats")
 
 PlayerTab:CreateSlider({
     Name         = "Walk Speed",
@@ -200,7 +282,7 @@ PlayerTab:CreateSlider({
 
 local MiscTab = Window:CreateTab("Misc", "settings")
 
-local MiscSection = MiscTab:CreateSection("Misc")
+MiscTab:CreateSection("Misc")
 
 MiscTab:CreateToggle({
     Name         = "Anti AFK",
@@ -212,7 +294,7 @@ MiscTab:CreateToggle({
             startAntiAFK()
             Rayfield:Notify({
                 Title    = "Anti AFK",
-                Content  = "Aktif! Karakter tidak akan bergerak & tidak akan di-kick.",
+                Content  = "Aktif! Tidak akan di-kick.",
                 Duration = 3,
                 Image    = 4483362458,
             })
@@ -234,7 +316,7 @@ MiscTab:CreateToggle({
 
 local SettingsTab = Window:CreateTab("Settings", "settings-2")
 
-local KeybindSection = SettingsTab:CreateSection("Keybinds")
+SettingsTab:CreateSection("Keybinds")
 
 SettingsTab:CreateKeybind({
     Name           = "Emergency Stop",
@@ -243,6 +325,7 @@ SettingsTab:CreateKeybind({
     Flag           = "EmergencyStop",
     Callback       = function()
         autoQuestEnabled = false
+        autoSellEnabled  = false
         antiAfkEnabled   = false
         stopAntiAFK()
         for i = 1, 5 do questEnabled[i] = false end
@@ -259,7 +342,7 @@ SettingsTab:CreateKeybind({
 --  QUEST LOGIC
 -- ================================================
 
-local function openDialog()
+local function openQuestDialog()
     RemoteEvent:FireServer("触发聊天", {"哈利因特", 10010100})
     task.wait(0.5)
     RemoteEvent:FireServer("触发聊天", {"哈利因特", 10010501})
@@ -267,13 +350,13 @@ local function openDialog()
 end
 
 local function acceptQuest(index)
-    openDialog()
+    openQuestDialog()
     TalkFunc:InvokeServer("发放任务", {QUEST_MAP[index]})
     StatusLabel:Set("Quest "..index..": Bunuh musuh!")
 end
 
 local function submitQuest()
-    openDialog()
+    openQuestDialog()
     for i = 1, 20 do
         pcall(function()
             TalkFunc:InvokeServer("完成任务", {"任务"..i})
@@ -349,6 +432,90 @@ task.spawn(function()
         end
 
         task.wait(1)
+    end
+end)
+
+-- ================================================
+--  SELL LOGIC
+-- ================================================
+
+local function openSellDialog()
+    RemoteEvent:FireServer("触发聊天", {"隆巴特", 10030100})
+    task.wait(0.5)
+    RemoteEvent:FireServer("触发聊天", {"隆巴特", 10030401})
+    task.wait(1)
+    TalkFunc:InvokeServer("打开界面", {"SellPop"})
+    task.wait(1)
+end
+
+local function doSell()
+    SellStatusLabel:Set("Membuka toko...")
+    openSellDialog()
+
+    local countList = {}
+    local onlyIDList = {}
+    local count = 0
+    local bag = player:FindFirstChild("Bag")
+
+    if not bag then
+        SellStatusLabel:Set("Bag tidak ditemukan!")
+        return
+    end
+
+    -- Kumpulkan item yang dipilih
+    for i, mat in ipairs(MATERIAL_LIST) do
+        if sellEnabled[i] then
+            -- Cari jumlah item di bag berdasarkan ID sell
+            for _, item in pairs(bag:GetChildren()) do
+                if item:IsA("NumberValue") and item.Value > 0 then
+                    -- Match ID bag ke ID sell
+                    count = count + 1
+                    countList[count] = item.Value
+                    onlyIDList[count] = mat.id
+                    print("Sell:", mat.name, "x"..item.Value, "ID:", mat.id)
+                    break
+                end
+            end
+        end
+    end
+
+    if count == 0 then
+        SellStatusLabel:Set("Tidak ada item dipilih!")
+        return
+    end
+
+    -- Kirim sell request
+    local ok, result = pcall(function()
+        return RemoteFunction:InvokeServer("出售包物品", {
+            countList = countList,
+            onlyIDList = onlyIDList
+        })
+    end)
+
+    if ok then
+        SellStatusLabel:Set("Sell selesai! "..count.." item terjual.")
+        Rayfield:Notify({
+            Title   = "Auto Sell",
+            Content = count.." item berhasil dijual!",
+            Duration = 3,
+            Image   = 4483362458,
+        })
+    else
+        SellStatusLabel:Set("Sell gagal!")
+    end
+end
+
+-- Auto Sell Loop (cek inventory penuh)
+task.spawn(function()
+    while true do
+        task.wait(5)
+        if autoSellEnabled then
+            local bagFull = player:FindFirstChild("BagFullMaterial")
+            if bagFull and bagFull.Value == true then
+                SellStatusLabel:Set("Inventory penuh! Auto sell...")
+                doSell()
+            end
+        end
     end
 end)
 
